@@ -8,33 +8,8 @@
         <option name="defaultSourceRootUrl" value="file://$MODULE_DIR$/src" />
         <option name="moduleContents">
           <ModuleContents>
-            <option name="contentSelectionType" value="SELECTED" />
-            <option name="manifest">
-              <Manifest>
-                <option name="types">
-                  <set>
-                    <MetadataType>
-                      <option name="name" value="ApexClass" />
-                    </MetadataType>
-                    <MetadataType>
-                      <option name="name" value="ApexTrigger" />
-                    </MetadataType>
-                    <MetadataType>
-                      <option name="entries">
-                        <list>
-                          <MetadataEntry>
-                            <option name="name" value="test" />
-                            <option name="selected" value="true" />
-                          </MetadataEntry>
-                        </list>
-                      </option>
-                      <option name="name" value="AuraDefinitionBundle" />
-                      <option name="wildcard" value="false" />
-                    </MetadataType>
-                  </set>
-                </option>
-              </Manifest>
-            </option>
+            <option name="contentSelectionType" value="PACKAGE_XML" />
+            <option name="packageXmlRelativePath" value="src/package.xml" />
           </ModuleContents>
         </option>
       </configuration>

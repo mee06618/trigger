@@ -8,20 +8,19 @@
 
 // lead 숫자 기준 하나당 5점 최대 20점 account에 score핃드 추가 lead생성시 확인 --lead생성시마다 -완-
 // afterupdate 만들어야 될듯 edit햇을때
+
+//case 삭제
 public with sharing class LeadTriggerHandler extends TriggerHandler {
-    List<Lead> newLeads;
-    static Integer num=0;
-    static Integer score=0;
 
 
-    Set<String> companyNames = New Set<String>();
-    Set<String> lastNames = New Set<String>();
-    Map<String,ID> accountNamesId=new Map<String,ID>();
 
 
-    public LeadTriggerHandler(){
-        newLeads=(List<Lead>) Trigger.new;
-    }
+    Map<Id,Lead> LeadFields = new Map<Id,Lead>();
+
+
+
+
+
 
 
 
@@ -29,206 +28,210 @@ public with sharing class LeadTriggerHandler extends TriggerHandler {
     public override void beforeInsert() {
 
 
-        for (Lead l : newLeads) {
-            companyNames.add(l.Company);
-            lastNames.add(l.LastName);
+        List<Account> existingAccounts = new List<Account>();
+
+        for(Account temp :  [SELECT Name, Score__c FROM Account WHERE Name = :LeadFields.keySet()])
+       {
+                existingAccounts.add(temp);
+       }
 
 
-        }
+        updateLeadScore(existingAccounts); //lead 생성시 lead 점수 변환
 
 
-        List<Account> existingAccounts = [SELECT Name, Score__c FROM Account WHERE Name Like :companyNames];
 
 
-        //account생성 생성시 account 있는지 확인 lead있는지 확인후 갯수에따른 점수 업데이트
-        if (existingAccounts.isEmpty()) {
-            //입력된 회사가 없을때 - 회사 최초 입력시
-            for (Lead l : newLeads) {
-                Account a = new Account();
-                getEmployeesScore(l.NumberOfEmployees);  //직원수에 따라 점수추가
-                getRevenueScore((Integer) l.AnnualRevenue); //수입에 따라 점수추가
-                a.Score__c = 0;
-                a.Score__c += num;
-                score = (Integer) a.Score__c; //직원수 수입 점수 추가 됨
-                System.debug('새로 생성됨 현재 점수 : ' + a.Score__c);
-
-            }
-
-            //insert 자동
 
 
-        } else { //이미 있는 회사
-            List<Account> accNum = [SELECT Name, Score__c FROM Account WHERE Name Like :companyNames];
-            for (Account a : existingAccounts) {
-
-                accountNamesId.put(a.Name, a.Id);
-                if (accNum.size() < 5) num = 5; //lead의 개수가 5개 미만이면 각개수 마다 점수5점
-                else num = 0;
-
-//                getEmployeesScore(l.NumberOfEmployees);  //직원수에 따라 점수추가
-//                getRevenueScore((Integer)  l.AnnualRevenue); //수입에 따라 점수추가
-                //처음 입력됬을때 회사 수입 입력되서 생략
-
-                a.Score__c = accNum[0].Score__c;
-
-                a.Score__c += num;
-                score = (Integer) a.Score__c;
-                System.debug('추가되서 변한 점수 : ' + score);
-
-            }
-
-
-        }
-
-
-        score += getNumberOfFullfill(newLeads); //lead입력시 정보의 개수에따라 점수 추가
-        System.debug('last ' + score);
 
 
         //기존의 같은 이름의 lead생성시 다른 정보 입력시 나머지 업데이트
-        Lead upserts = new Lead();
-        try {
-            for (Lead ob : [
-                    select id, LastName
-                    from Lead
-                    where LastName LIKE :lastNames
-                    LIMIT 1
-            ]) {
-                upserts = ob;
-            }
-            for (Lead b : newLeads) {
+        Map<Id,Lead> compareLead =new Map<Id,Lead>([SELECT Name,Id FROM Lead Where Id = :LeadFields.keySet()]);
+        List<Lead> updateLead = new List<Lead>();
+        Boolean isEqual = false;
+        for(Lead newLead : LeadFields.values()){
+            if(compareLead.containsKey(newLead.Id))
+            {
+                //중복
 
-                upserts.Company = b.Company;
-                upserts.NumberOfEmployees = b.NumberOfEmployees;
-                upserts.AnnualRevenue = b.AnnualRevenue;
+                isEqual=true;
+                updateLead.add(newLead);
             }
 
-            update upserts;
-
-        } catch (Exception e) {
 
         }
-
-        if (score >= 60) { //점수 60점 이상일때 account contact case 생성
-            List<Case> newCases = new List<Case>();
-            List<Account> newAccount = new List<Account>();
-
-            for (Lead lead : newLeads) {
-
-                if (lead.isConverted == false) //convert가 안되있으면
-                {
+        //if(isEqual)
+            //update updateLead;
 
 
-                    Opportunity opp = new Opportunity();
-                    if (lead.Title != null)
-                        opp.Name = lead.Title;
-                    else
-                            opp.Name = lead.Company + ' 기회';
-
-                    Date myDate = Date.today();
-                    myDate = myDate.addYears(1);
-                    opp.CloseDate = myDate;
-
-                    opp.StageName = 'Prospecting';
-
-
-                    insert opp;
-
-
-                    for (Lead l : newLeads) {
-                        if (accountNamesId.keySet().contains(l.Company)) {
-                            Case c = new Case ();
-                            c.AccountId = accountNamesId.get(l.Company);
-                            c.Subject = '이미 있는 ' + l.Company;
-                            c.Status = '생성됨';
-                            newCases.add(c);
-                            //기존에 있으니 추가점수
-                        } else {
-                            Case c = new Case ();
-                            c.AccountId = accountNamesId.get(l.Company);
-                            c.Subject = '신규 ' + l.Company;
-                            c.Status = '처음생성됨';
-                            newCases.add(c);
-                        }
-                        insert newCases;
-                    }
-
-                    List<Account> duplicateAccounts = [
-                            SELECT Id, Name
-                            FROM Account
-                            WHERE Name LIKE :lead.Company
-                    ];
-
-                    if (duplicateAccounts.size() == 0) { //Account에 같은 이름을 가진 회사가없으면 생성 있으면 정보 업데이트
-
-                        for (Lead l : newLeads) {
-                            Account a = new Account();
-
-                            getEmployeesScore(l.NumberOfEmployees);
-                            getRevenueScore((Integer) l.AnnualRevenue);
-                            a.Score__c = score;
-                            a.Name = l.Company;
-                            newAccount.add(a);
-                        }
-                        System.debug('최초 account 생성');
-                       // insert newAccount;
-                    } else {
-                        List<Account> temp = new List<Account>();
-                        for (Account a : existingAccounts) {
-                            accountNamesId.put(a.Name, a.Id);
-                            a.Score__c = score;
-                            temp.add(a);
-                            System.debug('동일 account 생성');
-
-                        }
-                        update temp;
-
-
-                    }
-                    Contact con = new Contact();
-                    con.LastName = lead.LastName;
-                    insert con;
-
-                }
-
-
-            }
-        }
     }
     public override void afterInsert() {
-        if (score >= 60) { //데이터 입력후 점수가 60점이상이면 lead convert
+
+        //입력받은 값의 점수총합이 60이 넘어가면 Convert
+
+        Database.LeadConvert[] converts = new Database.LeadConvert[0];
 
 
-            for (Lead lead : newLeads) {
+        for (Lead lead : LeadFields.values()) {
 
-                if (lead.isConverted == false && score>=60) //to prevent recursion
+            if (lead.score__c >= 60) {
+
+
+                if (lead.isConverted == false) //to prevent recursion
                 {
 
-                        Database.LeadConvert lc = new Database.LeadConvert();
+                    Database.LeadConvert lc = new Database.LeadConvert();
                     lc.setLeadId(lead.Id);
 
+                    lc.setContactId(lead.Id);
+                    lc.setAccountId(lead.Id);
                     lc.convertedStatus = 'Closed - Converted';
 
+                    lc.setDoNotCreateOpportunity(false);
+                    converts.add(lc);
 
-                    lc.setDoNotCreateOpportunity(true);
-                    Database.LeadConvertResult lcr = Database.convertLead(lc);
-                    System.debug(lcr.isSuccess());
                 }
 
+                List<Lead> notConverted = [SELECT Id FROM Lead WHERE IsConverted=FALSE AND LastName=:lead.LastName and Company=:lead.Company AND ProductInterest__c =:lead.ProductInterest__c];
+
+                for(Lead temp :notConverted){
+                    System.debug(temp);
+                  temp.Status='Closed - Not Converted';
+                  update temp;
+                }
             }
+
+
+        }
+        List<Database.LeadConvertResult> oppResult =  Database.convertLead(converts);
+
+        for(Database.LeadConvertResult convert: oppResult) {
+
+            Opportunity temp = [SELECT Name FROM Opportunity WHERE Id = :convert.opportunityId];
+            Lead lead = [SELECT score__c FROM Lead WHERE Id =:convert.leadId];
+            temp.score__c = lead.score__c;
+            update temp;
+
+            //last name first name, company,email,Phone
+
         }
 
+    }
+    public override  void beforeUpdate() {
+
+//        Lead upserts = new Lead();
+//        List<Account> existingAccounts = new List<Account>();
+//
+//        for(Account temp :  [SELECT Name, Score__c FROM Account WHERE Name = :LeadFields.keySet()])
+//        {
+//            existingAccounts.add(temp);
+//        }
+//
+//        updateLeadScore(existingAccounts);
+//        Database.LeadConvert[] converts = new Database.LeadConvert[0];
+//        for (lead l : LeadFields.values()) {
+//            if (l.score__c >= 60) {
+//                if (l.isConverted == false) {
+//                    Database.LeadConvert lc = new Database.LeadConvert();
+//
+//                    lc.setContactId(l.Id);
+//                    lc.setAccountId(l.Id);
+//
+//                    lc.convertedStatus = 'Closed - Converted';
+//
+//                    lc.setDoNotCreateOpportunity(false);
+//                    converts.add(lc);
+//
+//                }
+//            }
+//        }
+//        Database.convertLead(converts);
+       // List<Database.LeadConvertResult> oppResult =  Database.convertLead(converts);
+
+
+//        for(Database.LeadConvertResult convert: oppResult) {
+//            System.debug(convert);
+//            Opportunity temp = [SELECT Name FROM Opportunity WHERE Id = :convert.opportunityId];
+//            Lead lead = [SELECT score__c FROM Lead WHERE Id =:convert.leadId];
+//            temp.score__c = lead.score__c;
+//            update temp;
+//
+//            //last name first name, company,email,Phone
+//
+//        }
 
     }
 
 
+//    public static List<Lead> findContacts(List<Lead> newList) {
+//        List<Lead> foundLead = new List<Lead>();
+//        List<Datacloud.FindDuplicatesResult> results;
+//        try {
+//            results = Datacloud.FindDuplicates.findDuplicates(newList);
+//        } catch (Exception ex) {
+//            return null;
+//        }
+//
+//
+//        for (Integer i = 0; i < newList.size(); i++) {
+//            Lead foundCon = null;
+//            for (Datacloud.DuplicateResult dr : results[i].getDuplicateResults()) {
+//                if (dr.matchResults.size() > 0 && dr.getMatchResults()[0].matchRecords.size() > 0) {
+//                    foundCon = (Lead) dr.getMatchResults()[0].getMatchRecords()[0].getRecord();
+//                    break;
+//                }
+//            }
+//            foundLead.add(foundCon);
+//        }
+//
+//        return foundLead;
+//    }
+    private void updateLeadScore(List<Account> existingAccounts) {
+        Integer score=0;
+        //account생성 생성시 account 있는지 확인 lead있는지 확인후 갯수에따른 점수 업데이트
+        if (existingAccounts.isEmpty()) {
+            //입력된 회사가 없을때 - 회사 최초 입력시
+            for (Lead l : LeadFields.values()) {
+                score=0;
+                score += getEmployeesScore(l.NumberOfEmployees);  //직원수에 따라 점수추가
+                score += getRevenueScore((Integer) l.AnnualRevenue); //수입에 따라 점수추가
+                score += getNumberOfFullfill(); //정보 채워진 정도에 따라 점수추가
+                l.score__c=score;
+
+
+            }
+
+
+        } else { //이미 있는 회사
+
+            List<Lead> LeadNum = [SELECT Id,score__c FROM Lead ];
+            for (Lead l : LeadFields.values()) {
 
 
 
-    private void getRevenueScore(Integer revenue){
+                    if (LeadNum.size() < 5) score = 5*LeadNum.size(); //lead의 개수가 5개 미만이면 각개수 마다 점수5점
+                    else score = 20;
+                    score += getEmployeesScore(l.NumberOfEmployees);  //직원수에 따라 점수추가
+                    score += getRevenueScore((Integer) l.AnnualRevenue); //수입에 따라 점수추가
+                    score += getNumberOfFullfill();//정보 채워진 정도에 따라 점수추가
 
+
+
+                    l.score__c=score;
+                    System.debug('점 : ' + score);
+
+
+
+
+            }
+        }
+    }
+
+
+    private Integer getRevenueScore(Integer revenue){
+    Integer num =0;
         if(revenue>= 10000){
-            num+=30;
+            num+=25;
         }
         else if(revenue>= 5000) {
             num+=20;
@@ -240,15 +243,15 @@ public with sharing class LeadTriggerHandler extends TriggerHandler {
             num+=10;
         }
 
-
+    return num;
 
     }
 
 
-    private void getEmployeesScore(Integer employee){
-
+    private Integer getEmployeesScore(Integer employee){
+    Integer num=0;
         if(employee>= 1000){
-            num+=30;
+            num+=25;
         }
         else if(employee>= 700) {
             num+=20;
@@ -259,29 +262,29 @@ public with sharing class LeadTriggerHandler extends TriggerHandler {
         else if(employee>= 50) {
             num+=10;
         }
-
+    return num;
 
     }
 
-    private Integer getNumberOfFullfill(List<Lead> leads){
-        Integer score=0;
-        for(lead lead : leads){
-            if(lead.FirstName!=null)score++;
-            if(lead.Title!=null)score++;
-            if(lead.Industry!=null)score++;
-            if(lead.AnnualRevenue!=null)score++;
-            if(lead.Phone!=null)score++;
-            if(lead.MobilePhone!=null)score++;
-            if(lead.Email!=null)score++;
-            if(lead.NumberOfEmployees!=null)score++;
+    private Integer getNumberOfFullfill(){
+        Integer num=0;
+        for(lead lead : LeadFields.values()){
+            if(lead.FirstName!=null)num++;
+            if(lead.Title!=null)num++;
+            if(lead.Industry!=null)num++;
+            if(lead.AnnualRevenue!=null)num++;
+            if(lead.Phone!=null)num++;
+            if(lead.MobilePhone!=null)num++;
+            if(lead.Email!=null)num++;
+            if(lead.NumberOfEmployees!=null)num++;
         }
-        if(score==8) score=25;
-        else if(score>=5) score=20;
-        else if(score>=3) score=15;
-        else score=10;
+        if(num==8) num=25;
+        else if(num>=5) num=20;
+        else if(num>=3) num=15;
+        else num=10;
 
 
-        return score;
+        return num;
     }
 
 
