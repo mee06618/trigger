@@ -31,30 +31,25 @@ public with sharing class LeadTriggerHandler extends TriggerHandler {
 
 
     public override void beforeInsert() {
+    if(Trigger.isInsert && trigger.isBefore ){
+            List<Account> existingAccountsInsert = new List<Account>();
+            for(Account temp :  [SELECT Name, Score__c FROM Account WHERE Id = :LeadFields.keySet()])
+            {
+                existingAccountsInsert.add(temp);
 
-        List<Account> existingAccountsInsert = new List<Account>();
-        for(Account temp :  [SELECT Name, Score__c FROM Account WHERE Id = :LeadFields.keySet()])
-        {
-            existingAccountsInsert.add(temp);
+            }
 
-        }
-
-
-        updateLeadScore(existingAccountsInsert); //lead 생성시 lead 점수 변환
-
-
-
-        //last name first name, company,email,Phone,Product Interest(lead 주제)
-
-        //if(isEqual)
-            //update updateLead;
+            System.debug(existingAccountsInsert);
+            updateLeadScore(existingAccountsInsert); //lead 생성시 lead 점수 변환
 
 
+
+}
     }
     public override void afterInsert() {
-
+    try {//2번실행되서 2번째는 null값이 들어가 error넘기고 실행하기위해
         //입력받은 값의 점수총합이 60이 넘어가면 Convert
-        if(Trigger.isInsert && trigger.isAfter) {
+        if (Trigger.isInsert && trigger.isAfter) {
             System.debug('삽입');
             Database.LeadConvert[] converts = new Database.LeadConvert[0];
 
@@ -78,8 +73,8 @@ public with sharing class LeadTriggerHandler extends TriggerHandler {
                         if (isDup == null) {
                             lc.setAccountId(lead.Id);
                         } else {
-                            Account acc = [SELECT Id FROM Account WHERE Name = :isDup.Name LIMIT 1];
-                            lc.setAccountId(acc.Id);
+
+                            lc.setAccountId(isDup.Id);
                         }
                         lc.convertedStatus = 'Closed - Converted';
                         System.debug(lc);
@@ -90,7 +85,7 @@ public with sharing class LeadTriggerHandler extends TriggerHandler {
 
 
                     //convert시 같은lead들 cancel
-                    List<Lead> notConverted = [SELECT Id FROM Lead WHERE IsConverted = FALSE AND LastName = :lead.LastName and Company = :lead.Company AND Status!= 'Closed - Converted'];
+                    List<Lead> notConverted = [SELECT Id,Status FROM Lead WHERE IsConverted = FALSE AND LastName = :lead.LastName and Company = :lead.Company AND Status != 'Closed - Converted'];
 
                     for (Lead temp : notConverted) {
 
@@ -100,27 +95,28 @@ public with sharing class LeadTriggerHandler extends TriggerHandler {
                     }
 
 
-                    //기존의 같은 이름의 lead생성시 다른 정보 입력시 나머지 업데이트
-                    Map<Id, Lead> compareLead = new Map<Id, Lead>([SELECT Name, Id FROM Lead Where Id = :LeadFields.keySet()]);
-                    List<Lead> updateLead = new List<Lead>();
-                    Boolean isEqual = false;
-                    for (Lead newLead : LeadFields.values()) {
-                        if (compareLead.containsKey(newLead.Id)) {
-                            //중복
-
-                            isEqual = true;
-                            updateLead.add(newLead);
-                        }
-
-
-                    }
+//                    //기존의 같은 이름의 lead생성시 다른 정보 입력시 나머지 업데이트
+//                    Map<Id, Lead> compareLead = new Map<Id, Lead>([SELECT Name, Id FROM Lead Where Id = :LeadFields.keySet()]);
+//                    List<Lead> updateLead = new List<Lead>();
+//                    Boolean isEqual = false;
+//                    for (Lead newLead : LeadFields.values()) {
+//                        if (compareLead.containsKey(newLead.Id)) {
+//                            //중복
+//
+//                            isEqual = true;
+//                            updateLead.add(newLead);
+//                        }
+//
+//
+//                    }
 
 
                     if (isDup != null) {
-                        Account updateaAccount = [SELECT AnnualRevenue, NumberOfEmployees FROM Account WHERE Name = :isDup.Name limit 1];
-
+                        Account updateaAccount = [SELECT AnnualRevenue, NumberOfEmployees FROM Account WHERE Id = :isDup.Id limit 1];
+                        System.debug('lead : '+lead );
                         updateaAccount.AnnualRevenue = lead.AnnualRevenue;
                         updateaAccount.NumberOfEmployees = lead.NumberOfEmployees;
+                        System.debug('변환 account : '+updateaAccount );
                         System.debug('account 업데이트');
                     }
 
@@ -129,7 +125,7 @@ public with sharing class LeadTriggerHandler extends TriggerHandler {
 
                 for (Database.LeadConvertResult convert : oppResult) {
 
-                    Opportunity temp = [SELECT Name FROM Opportunity WHERE Id = :convert.opportunityId];
+                    Opportunity temp = [SELECT Name, score__c FROM Opportunity WHERE Id = :convert.opportunityId];
                     Lead tempLead = [SELECT score__c FROM Lead WHERE Id = :convert.leadId];
                     temp.score__c = tempLead.score__c;
                     update temp;
@@ -139,94 +135,112 @@ public with sharing class LeadTriggerHandler extends TriggerHandler {
 
             }
         }
-
+    }catch(Exception e){
+        System.debug(e);
+    }
+        HelperClass.flag=false;
 }
     public override  void beforeUpdate() {
-            System.debug('점수변경');
-        if(trigger.isUpdate && trigger.isBefore){
-            Account isDup=new Account();
-            List<Account> existingAccountsUpdate = new List<Account>();
-            Lead tem = (Lead) LeadFields.values();
-            for(Account temp : [SELECT Name, Score__c FROM Account WHERE Name = :tem.Company])
-            {
-                existingAccountsUpdate.add(temp);
-
-
-            }
-
-            updateLeadScore(existingAccountsUpdate);
-
-
-
-            }
-    }
-
-
-    public override void afterUpdate(){
-
-            if (Trigger.isUpdate && Trigger.isAfter) {
-                System.debug('업데이트');
-                Database.LeadConvert[] converts = new Database.LeadConvert[0];
-
-                for (lead l : LeadFields.values()) {
-                    System.debug('중복회사'+l.Company);
-                    Account isDup = new Account();
-                    if (l.score__c >= 60) {
-                        if (l.isConverted == false) {
-
-
-                            isDup = duplicate(l.Company);
-
-                            Database.LeadConvert lc = new Database.LeadConvert();
-                            lc.setLeadId(l.Id);
-                            lc.setContactId(l.Id);
-                            if (isDup == null) {
-                                lc.setAccountId(l.Id);
-                            } else {
-                                Account acc = [SELECT Id FROM Account WHERE Name = :isDup.Name LIMIT 1];
-                                lc.setAccountId(acc.Id);
-                            }
-
-
-                            lc.convertedStatus = 'Closed - Converted';
-
-                            lc.setDoNotCreateOpportunity(false);
-                            converts.add(lc);
-
-                        }
-
-
-                        if (isDup != null) {
-                            System.debug('중복 넣기전' + isDup);
-                            Account updateaAccount = [SELECT AnnualRevenue, NumberOfEmployees FROM Account WHERE Name = :isDup.Name limit 1];
-
-                            updateaAccount.AnnualRevenue = l.AnnualRevenue;
-                            updateaAccount.NumberOfEmployees = l.NumberOfEmployees;
-                            System.debug('account 업데이트');
-                        }
-
-                        //  Database.convertLead(converts);
-
-                        List<Database.LeadConvertResult> oppResult = Database.convertLead(converts);
-
-
-                        for (Database.LeadConvertResult convert : oppResult) {
-                            System.debug(convert);
-                            Opportunity temp = [SELECT Name FROM Opportunity WHERE Id = :convert.opportunityId];
-                            Lead lead = [SELECT score__c FROM Lead WHERE Id = :convert.leadId];
-                            lead.score__c = updatedScore;
-                            temp.score__c = lead.score__c;
-
-                        }
-                    }
-
-                }
-
-
-            }
+//        if (Trigger.isUpdate && Trigger.isBefore ) {
+//            System.debug('점수변경');
+//
+//                Account isDup = new Account();
+//                List<Account> existingAccountsUpdate = new List<Account>();
+//                Lead tem = (Lead) LeadFields.values();
+//                for (Account temp : [SELECT Name, Score__c FROM Account WHERE Name = :tem.Company]) {
+//                    existingAccountsUpdate.add(temp);
+//
+//
+//                }
+//                System.debug('회사 : ' + existingAccountsUpdate);
+//                updateLeadScore(existingAccountsUpdate);
+//
+//
+//            }
 
     }
 
+
+    public override void afterUpdate() {
+//        try {
+//            if (Trigger.isUpdate && Trigger.isAfter ) {
+//                System.debug('업데이트');
+//                Database.LeadConvert[] converts = new Database.LeadConvert[0];
+//
+//                for (lead l : LeadFields.values()) {
+//                    System.debug('중복회사' + l.Company);
+//                    Account isDup = new Account();
+//                    if (l.score__c >= 60) {
+//
+//                        if (l.isConverted == false) {
+//
+//
+//                            isDup = duplicate(l.Company);
+//
+//                            Database.LeadConvert lc = new Database.LeadConvert();
+//                            lc.setLeadId(l.Id);
+//                            lc.setContactId(l.Id);
+//                            if (isDup == null) {
+//                                lc.setAccountId(l.Id);
+//                            } else {
+//
+//                                lc.setAccountId(isDup.Id);
+//                            }
+//
+//
+//                            lc.convertedStatus = 'Closed - Converted';
+//
+//                            lc.setDoNotCreateOpportunity(false);
+//                            converts.add(lc);
+//
+//                        }
+//
+//
+//                        if (isDup != null) {
+//                            Account updateaAccount = [SELECT AnnualRevenue, NumberOfEmployees FROM Account WHERE Id = :isDup.Id limit 1];
+//                            System.debug('lead : '+l );
+//                            updateaAccount.AnnualRevenue = l.AnnualRevenue;
+//                            updateaAccount.NumberOfEmployees = l.NumberOfEmployees;
+//                            System.debug('변환 account : '+updateaAccount );
+//                            System.debug('account 업데이트');
+//                            update updateaAccount;
+//                        }
+//
+//                        //  Database.convertLead(converts);
+//
+//                        List<Database.LeadConvertResult> oppResult = Database.convertLead(converts);
+//
+//                        System.debug('result : ' + oppResult);
+//                        for (Database.LeadConvertResult convert : oppResult) {
+//
+//                            Opportunity temp = [SELECT Name, score__c FROM Opportunity WHERE Id = :convert.opportunityId];
+//
+//                            Lead lead = [SELECT score__c FROM Lead WHERE Id = :convert.leadId];
+//
+//
+//                            temp.score__c = lead.score__c;
+//                            System.debug('opp : ' + temp);
+//                            upsert temp;
+//                        }
+//                        List<Lead> notConverted = [SELECT Id FROM Lead WHERE IsConverted = FALSE AND LastName = :l.LastName and Company = :l.Company AND Status != 'Closed - Converted'];
+//
+//                        for (Lead temp : notConverted) {
+//
+//                            temp.Status = 'Cancel';
+//
+//                            update temp;
+//                        }
+//                    }
+//
+//                }
+//
+//
+//            }
+//        } catch (Exception e) {
+//            System.debug('업데이트 오류 : ' + e);
+//        }
+//        HelperClass.flag=false;
+    }
 
     private void updateLeadScore(List<Account> existingAccounts) {
         Integer score=0;
@@ -247,10 +261,10 @@ public with sharing class LeadTriggerHandler extends TriggerHandler {
 
         } else { //이미 있는 회사
 
-
+            System.debug('중복');
             for (Lead lead : LeadFields.values()) {
 
-                List<Lead> LeadNum = [SELECT Id,score__c FROM Lead WHERE LastName=:lead.LastName and Company=:lead.Company AND ProductInterest__c =:lead.ProductInterest__c AND Status!='Cancel'];
+                List<Lead> LeadNum = [SELECT Id,score__c FROM Lead WHERE LastName=:lead.LastName and Company=:lead.Company AND Status!='Cancel'];
                     if(LeadNum.size()==1)score=0;
                     else if (LeadNum.size() < 5) score = 5*(LeadNum.size()-1); //lead의 개수가 5개 미만이면 각개수 마다 점수5점
                     else score = 20;
@@ -291,8 +305,6 @@ public with sharing class LeadTriggerHandler extends TriggerHandler {
             for (Datacloud.DuplicateResult dupeResult : findDupeResult.getDuplicateResults()) {
                 for (Datacloud.MatchResult matchResult : dupeResult.getMatchResults()) {
                     for (Datacloud.MatchRecord matchRecord : matchResult.getMatchRecords()) {
-                       // duplicateRecords.add((SObject) matchRecord.getRecord());
-                        //  duplicateRecords.add((Lead)matchRecord.getRecord().get('Company'));
 
                         Account matchingAccount = (Account)matchRecord.getRecord();
                         System.debug('중복 ' +matchingAccount);
@@ -310,14 +322,14 @@ public with sharing class LeadTriggerHandler extends TriggerHandler {
 
         return null;
 
-        // 가장 정확도 높은 1건의 Record 반환
+
 
     }
 
     private Integer getRevenueScore(Integer revenue){
     Integer num =0;
         if(revenue>= 10000){
-            num+=35;
+            num+=25;
         }
         else if(revenue>= 5000) {
             num+=20;
