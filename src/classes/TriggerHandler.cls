@@ -62,6 +62,7 @@ public virtual class TriggerHandler {
         }
     }
 
+
     public void setMaxLoopCount(Integer max) {
         String handlerName = getHandlerName();
         if(!TriggerHandler.loopCountMap.containsKey(handlerName)) {
