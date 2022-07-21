@@ -3,5 +3,5 @@
  */
 
 public with sharing class LeadTriggerChecker {
-        public static boolean firstRun = true;
+        public static boolean firstRun=true;
 }
