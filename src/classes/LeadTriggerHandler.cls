@@ -10,7 +10,7 @@
 // afterupdate 만들어야 될듯 edit햇을때
 
 //case 삭제
-
+////////////////// 벌크부분 수정 ㅋㅋㅋㅋㅋㅋㅋㅋㅋㅋㅋㅋㅋㅋㅋㅋㅋㅋㅋㅋㅋㅋㅋㅋㅋㅋㅋㅋㅋㅋㅋㅋㅋㅋㅋㅋㅋㅋㅋㅋㅋㅋㅋ
 
 public with sharing class LeadTriggerHandler extends TriggerHandler {
 
@@ -32,124 +32,106 @@ public with sharing class LeadTriggerHandler extends TriggerHandler {
 
 
     public override void beforeInsert() {
-//    if(Trigger.isInsert && trigger.isBefore){
-//
-//        updateLeadScore();
-//
-//
-//}
+   if(Trigger.isInsert && trigger.isBefore){
+       System.debug('before : '+Trigger.new);
+
+        for(Lead lead : (List<Lead>)Trigger.new)
+        {
+
+            updateLeadScore(lead);
+
+        }
+
+
+
+    }
+
     }
     public override void afterInsert() {
-//    try {//2번실행되서 2번째는 null값이 들어가 error넘기고 실행하기위해
-//        //입력받은 값의 점수총합이 60이 넘어가면 Convert
-//        if (Trigger.isInsert && trigger.isAfter) {
-//
-//
-//            Database.LeadConvert[] converts = new Database.LeadConvert[0];
-//
-//
-//            for (Lead lead : LeadFields.values()) {
-//
-//                Account isDup = new Account();
-//                if (lead.score__c >= 60) {
-//
-//
-//                    if (lead.isConverted == false) //to prevent recursion
-//                    {
-//
-//                        isDup = duplicate(lead.Company);
-//
-//
-//                        Database.LeadConvert lc = new Database.LeadConvert();
-//                        lc.setLeadId(lead.Id);
-//
-//                        lc.setContactId(lead.Id);
-//                        if (isDup == null) {
-//                            lc.setAccountId(lead.Id);
-//                        } else {
-//
-//                            lc.setAccountId(isDup.Id);
-//                        }
-//                        lc.convertedStatus = 'Closed - Converted';
-//                        System.debug(lc);
-//                        lc.setDoNotCreateOpportunity(false);
-//                        converts.add(lc);
-//
-//                    }
-//
-//
-//                    //convert시 같은lead들 cancel
-//                    List<Lead> notConverted = [SELECT Id,Status FROM Lead WHERE IsConverted = FALSE AND LastName = :lead.LastName and Company = :lead.Company AND Status != 'Closed - Converted'];
-//
-//                    for (Lead temp : notConverted) {
-//
-//                        temp.Status = 'Cancel';
-//
-//                        update temp;
-//                    }
-//
-//
-////                    //기존의 같은 이름의 lead생성시 다른 정보 입력시 나머지 업데이트
-////                    Map<Id, Lead> compareLead = new Map<Id, Lead>([SELECT Name, Id FROM Lead Where Id = :LeadFields.keySet()]);
-////                    List<Lead> updateLead = new List<Lead>();
-////                    Boolean isEqual = false;
-////                    for (Lead newLead : LeadFields.values()) {
-////                        if (compareLead.containsKey(newLead.Id)) {
-////                            //중복
-////
-////                            isEqual = true;
-////                            updateLead.add(newLead);
-////                        }
-////
-////
-////                    }
-//
-//
-//                    if (isDup != null) {
-//                        Account updateaAccount = [SELECT AnnualRevenue, NumberOfEmployees FROM Account WHERE Id = :isDup.Id limit 1];
-//                        System.debug('lead : '+lead );
-//                        updateaAccount.AnnualRevenue = lead.AnnualRevenue;
-//                        updateaAccount.NumberOfEmployees = lead.NumberOfEmployees;
-//                        System.debug('변환 account : '+updateaAccount );
-//                        System.debug('account 업데이트');
-//                    }
-//
-//                }
-//                List<Database.LeadConvertResult> oppResult = Database.convertLead(converts);
-//
-//                for (Database.LeadConvertResult convert : oppResult) {
-//
-//                    Opportunity temp = [SELECT Name, score__c FROM Opportunity WHERE Id = :convert.opportunityId];
-//                    Lead tempLead = [SELECT score__c FROM Lead WHERE Id = :convert.leadId];
-//                    temp.score__c = tempLead.score__c;
-//                    update temp;
-//
-//                }
-//
-//
-//            }
-//
-//        }
-//    }catch(Exception e){
-//        System.debug(e);
-//    }
+        if(Trigger.isInsert && trigger.isAfter) {
+            System.debug('after insert : ' + (List<Lead>) Trigger.new);
+            try {
+                Account isDup = new Account();
+                List<Score__c> scoresss = new List<Score__c>();
+                list<Lead> LeadsToConvert = new list<Lead>();
+
+                for (Lead myLead : (List<Lead>) Trigger.new) {
+                    if (!myLead.isConverted && myLead.score__c >= 60) {
+                        System.debug('통과 ' + myLead.LastName);
+                        LeadsToConvert.add(myLead);
+                        isDup = duplicate(myLead.Company);
+
+                        Lead tempLead = new Lead(Id=myLead.Id);
+                            if(myLead.Status!= 'Closed - Converted')
+                                tempLead.Status = 'Cancel';
+
+
+                        if (isDup != null) {
+                            Account updateaAccount = [SELECT AnnualRevenue, NumberOfEmployees FROM Account WHERE Id = :isDup.Id limit 1];
+                            updateaAccount.AnnualRevenue = myLead.AnnualRevenue;
+                            updateaAccount.NumberOfEmployees = myLead.NumberOfEmployees;
+                            System.debug('변환 account : ' + updateaAccount);
+                            System.debug('account 업데이트');
+                            ///     update updateaAccount; for밖에다
+
+                        }
+                    }
+                }
+
+                list<Database.LeadConvert> converts = new list<Database.LeadConvert>();
+                for (Lead myLead : LeadsToConvert) {
+                    Database.LeadConvert lc = new database.LeadConvert();
+                    lc.setLeadId(myLead.Id);
+                    lc.setContactId(myLead.Id);
+                    if (isDup == null) {
+                        lc.setAccountId(myLead.Id);
+                    } else {
+
+                        lc.setAccountId(isDup.Id);
+                    }
+
+
+                    lc.convertedStatus = 'Closed - Converted';
+                    converts.add(lc);
+
+
+
+                    Score__c scores = new Score__c();
+
+                    scores.LeadName__c = myLead.FirstName + myLead.LastName;
+                    scores.Company__c = myLead.Company;
+                    scores.AnnualRevenue__c = myLead.AnnualRevenue;
+                    scores.Score__c = myLead.score__c;
+                    scores.NumberOfEmployees__c = myLead.NumberOfEmployees;
+                    scores.reliability__c = reliability;
+                    scoresss.add(scores);
+                }
+
+                if (!converts.isEmpty()) {
+                    Database.LeadConvertResult[] lcrList = Database.convertLead(converts, false);
+
+
+                }
+
+
+            } catch (Exception e) {
+                System.debug('업데이트 오류 : ' + e);
+            }
+
+        }
 
 }
     public override  void beforeUpdate() {
         if (Trigger.isUpdate && Trigger.isBefore ) {
 
-            List<Account> existingAccountsInsert = new List<Account>();
-
-            for(Account temp :  [SELECT Name, Score__c FROM Account  WHERE Id = :LeadFields.keySet()])//sql
+            for(Lead lead :  (List<Lead>)Trigger.new)
             {
 
-                existingAccountsInsert.add(temp);
+                updateLeadScore(lead);
 
             }
 
 
-            System.debug(existingAccountsInsert);
-            updateLeadScore(existingAccountsInsert); //lead 생성시 lead 점수 변환
 
 
 
@@ -160,136 +142,112 @@ public with sharing class LeadTriggerHandler extends TriggerHandler {
 
 
     public override void afterUpdate() {
-        try {
-            if (Trigger.isUpdate && Trigger.isAfter ) {
 
-
-                Database.LeadConvert[] converts = new Database.LeadConvert[0];
+        if (Trigger.isUpdate && Trigger.isAfter ) {
+            try {
+                Account isDup = new Account();
                 List<Score__c> scoresss = new List<Score__c>();
+                list<Lead> LeadsToConvert = new list<Lead>();
 
-                for (lead l : LeadFields.values()) {
-
-                    Account isDup = new Account();
-                    if (l.score__c >= 60) {
-
-                        if (l.isConverted == false) {
-
-
-                            isDup = duplicate(l.Company);
-
-                            Database.LeadConvert lc = new Database.LeadConvert();
-                            lc.setLeadId(l.Id);
-                            lc.setContactId(l.Id);
-                            if (isDup == null) {
-                                lc.setAccountId(l.Id);
-                            } else {
-
-                                lc.setAccountId(isDup.Id);
-                            }
+                for (Lead myLead : (List<Lead>) Trigger.new) {
+                    if (!myLead.isConverted && myLead.score__c >= 60) {
+                        System.debug('통과 ' + myLead.LastName);
+                        LeadsToConvert.add(myLead);
+                        isDup = duplicate(myLead.Company);
 
 
-                            lc.convertedStatus = 'Closed - Converted';
-
-                            lc.setDoNotCreateOpportunity(false);
-                            converts.add(lc);
-
-                        }
+                        if(myLead.Status!= 'Closed - Converted')
+                            myLead.Status = 'Cancel';
 
 
-
-                        //  Database.convertLead(converts);
-
-                        List<Database.LeadConvertResult> oppResult = Database.convertLead(converts);
-
-
-                        List<Lead> notConverted = [SELECT Status FROM Lead WHERE IsConverted = FALSE AND LastName = :l.LastName and Company = :l.Company AND Status != 'Closed - Converted'];
-
-                        for (Lead temp : notConverted) {
-
-                            temp.Status = 'Cancel';
-
-                           /// update temp;
-                        }
                         if (isDup != null) {
                             Account updateaAccount = [SELECT AnnualRevenue, NumberOfEmployees FROM Account WHERE Id = :isDup.Id limit 1];
-                            System.debug('lead : '+l );
-                            updateaAccount.AnnualRevenue = l.AnnualRevenue;
-                            updateaAccount.NumberOfEmployees = l.NumberOfEmployees;
-                            System.debug('변환 account : '+updateaAccount );
+                            updateaAccount.AnnualRevenue = myLead.AnnualRevenue;
+                            updateaAccount.NumberOfEmployees = myLead.NumberOfEmployees;
+                            System.debug('변환 account : ' + updateaAccount);
                             System.debug('account 업데이트');
-                          ///     update updateaAccount; for밖에다
+                            ///     update updateaAccount; for밖에다
 
-                        }
-                        System.debug('result : ' + oppResult);
-                        for (Database.LeadConvertResult convert : oppResult) {
-
-                            Opportunity temp = [SELECT Name, score__c FROM Opportunity WHERE Id = :convert.opportunityId];
-
-                            Lead lead = [SELECT score__c FROM Lead WHERE Id = :convert.leadId];
-
-
-                            temp.score__c = lead.score__c;
-                            System.debug('opp : ' + temp);
-                            upsert temp;
                         }
                     }
-                Score__c scores = new Score__c();
+                }
 
-                    scores.LeadName__c=l.FirstName+l.LastName;
-                    scores.Company__c=l.Company;
-                    scores.AnnualRevenue__c=l.AnnualRevenue;
-                    scores.Score__c=l.score__c;
-                    scores.NumberOfEmployees__c=l.NumberOfEmployees;
-                    scores.reliability__c=reliability;
+                list<Database.LeadConvert> converts = new list<Database.LeadConvert>();
+                for (Lead myLead : LeadsToConvert) {
+                    Database.LeadConvert lc = new database.LeadConvert();
+                    lc.setLeadId(myLead.Id);
+                    lc.setContactId(myLead.Id);
+                    if (isDup == null) {
+                        lc.setAccountId(myLead.Id);
+                    } else {
+
+                        lc.setAccountId(isDup.Id);
+                    }
+
+
+                    lc.convertedStatus = 'Closed - Converted';
+                    converts.add(lc);
+
+
+
+                    Score__c scores = new Score__c();
+
+                    scores.LeadName__c = myLead.FirstName + myLead.LastName;
+                    scores.Company__c = myLead.Company;
+                    scores.AnnualRevenue__c = myLead.AnnualRevenue;
+                    scores.Score__c = myLead.score__c;
+                    scores.NumberOfEmployees__c = myLead.NumberOfEmployees;
+                    scores.reliability__c = reliability;
                     scoresss.add(scores);
                 }
 
-                upsert scoresss;
-                if(LeadTriggerChecker.firstRun)
-                    LeadTriggerChecker.firstRun=false;
-            }
-        } catch (Exception e) {
-            System.debug('업데이트 오류 : ' + e);
-        }
+                if (!converts.isEmpty()) {
+                    Database.LeadConvertResult[] lcrList = Database.convertLead(converts, false);
 
+
+                }
+
+
+
+            } catch (Exception e) {
+                System.debug('업데이트 오류 : ' + e);
+            }
+        }
     }
 
-    private void updateLeadScore(List<Account> existingAccounts) {
+    private void updateLeadScore(Lead newlead) {
         Integer score=0;
         //account생성 생성시 account 있는지 확인 lead있는지 확인후 갯수에따른 점수 업데이트
 
-        if (existingAccounts.isEmpty()) {
+        List<Account> acc =[SELECT Id FROM Account  WHERE Id =:newlead.Id];
+        if (acc.size()<1) {
+            System.debug('신규회사');
         //입력된 회사가 없을때 - 회사 최초 입력시
-        for (Lead l : LeadFields.values()) {
+
+
             score = 0;
-            score += getEmployeesScore(l.NumberOfEmployees);  //직원수에 따라 점수추가
-            score += getRevenueScore((Integer) l.AnnualRevenue); //수입에 따라 점수추가
+            score += getEmployeesScore(newLead.NumberOfEmployees);  //직원수에 따라 점수추가
+            score += getRevenueScore((Integer) newLead.AnnualRevenue); //수입에 따라 점수추가
             score += getNumberOfFullfill(); //정보 채워진 정도에 따라 점수추가
-            l.score__c = score;
+            newLead.score__c = score;
 
-
-        }
 
 
     } else { //이미 있는 회사
 
         System.debug('중복');
-        for (Lead lead : LeadFields.values()) {
 
-            List<Lead> LeadNum = [SELECT Id, score__c FROM Lead WHERE LastName = :lead.LastName and Company = :lead.Company AND Status != 'Cancel'];
-            if (LeadNum.size() == 1)score = 0;
-            else if (LeadNum.size() < 5) score = 5 * (LeadNum.size() - 1); //lead의 개수가 5개 미만이면 각개수 마다 점수5점
-            else score = 20;
-            score += getEmployeesScore(lead.NumberOfEmployees);  //직원수에 따라 점수추가
-            score += getRevenueScore((Integer) lead.AnnualRevenue); //수입에 따라 점수추가
-            score += getNumberOfFullfill();//정보 채워진 정도에 따라 점수추가
+                List<Lead> LeadNum = [SELECT Id, score__c FROM Lead WHERE LastName = :newlead.LastName and Company = :newlead.Company AND Status != 'Cancel'];
+                if (LeadNum.size() == 1)score = 0;
+                else if (LeadNum.size() < 5) score = 5 * (LeadNum.size() - 1); //lead의 개수가 5개 미만이면 각개수 마다 점수5점
+                else score = 20;
+                score += getEmployeesScore(newlead.NumberOfEmployees);  //직원수에 따라 점수추가
+                score += getRevenueScore((Integer) newlead.AnnualRevenue); //수입에 따라 점수추가
+                score += getNumberOfFullfill();//정보 채워진 정도에 따라 점수추가
 
-
-                lead.score__c = score;
+            newlead.score__c = score;
 
 
-
-        }
 
 }
         }
@@ -307,15 +265,17 @@ public with sharing class LeadTriggerHandler extends TriggerHandler {
 
         accounts.add(account);
 
+
         Datacloud.FindDuplicatesResult[] results = Datacloud.FindDuplicates.findDuplicates(accounts);
-        System.debug('조회 : '+results);
+
         for (Datacloud.FindDuplicatesResult findDupeResult : results) {
             for (Datacloud.DuplicateResult dupeResult : findDupeResult.getDuplicateResults()) {
                 for (Datacloud.MatchResult matchResult : dupeResult.getMatchResults()) {
                     for (Datacloud.MatchRecord matchRecord : matchResult.getMatchRecords()) {
 
                         Account matchingAccount = (Account)matchRecord.getRecord();
-                        System.debug('중복 ' +matchingAccount);
+
+                        if(matchingAccount !=null)
                         return matchingAccount;
                     }
                 }
